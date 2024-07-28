@@ -1,39 +1,39 @@
 #!/bin/bash
 
-PSQL="psql --username=freecodecamp --dbname=periodic_table -t --no-align -c"
+DB_CMD="psql --username=freecodecamp --dbname=periodic_table -t --no-align -c"
 
-# Abort with message if no args where given
+# Exit with a message if no argument is provided
 if [[ -z $1 ]]; then
-	echo -e "Please provide an element as an argument."
-	exit
+    echo "Please provide an element as an argument."
+    exit 1
 fi
-# If arg might be a number, search by atomic number
-if [[ $1 < 'a' ]]; then
-	ATOMIC_NUMBER="$($PSQL "SELECT atomic_number FROM elements WHERE atomic_number = CAST('$1' AS INT);")"
+
+# Determine if the argument is numeric or alphabetic
+if [[ $1 =~ ^[0-9]+$ ]]; then
+    ELEMENT_ID=$($DB_CMD "SELECT atomic_number FROM elements WHERE atomic_number = $1;")
 else
-	# Search by element symbol
-	ATOMIC_NUMBER="$($PSQL "SELECT atomic_number FROM elements WHERE symbol = '$1';")"
-	# Search by element name
-	if [[ -z $ATOMIC_NUMBER ]]; then
-		ATOMIC_NUMBER="$($PSQL "SELECT atomic_number FROM elements WHERE name = '$1';")"
-	fi
-fi
-# Element not found
-if [[ -z $ATOMIC_NUMBER ]]; then
-  echo "I could not find that element in the database."
-  exit
+    # Search by symbol
+    ELEMENT_ID=$($DB_CMD "SELECT atomic_number FROM elements WHERE symbol = '$1';")
+    # If not found by symbol, search by name
+    if [[ -z $ELEMENT_ID ]]; then
+        ELEMENT_ID=$($DB_CMD "SELECT atomic_number FROM elements WHERE name = '$1';")
+    fi
 fi
 
-# Get element record
-ELEMENT_NAME="$($PSQL "SELECT name FROM elements WHERE atomic_number=$ATOMIC_NUMBER;")"
-ELEMENT_SYMBOL="$($PSQL "SELECT symbol FROM elements WHERE atomic_number=$ATOMIC_NUMBER;")"
-ELEMENT_TYPE_ID="$($PSQL "SELECT type_id FROM properties WHERE atomic_number=$ATOMIC_NUMBER;")"
-ELEMENT_TYPE="$($PSQL "SELECT type FROM types WHERE type_id=$ELEMENT_TYPE_ID;")"
-ATOMIC_MASS="$($PSQL "SELECT atomic_mass FROM properties WHERE atomic_number=$ATOMIC_NUMBER;")"
-MELTING_POINT="$($PSQL "SELECT melting_point_celsius FROM properties WHERE atomic_number=$ATOMIC_NUMBER;")"
-BOILING_POINT="$($PSQL "SELECT boiling_point_celsius FROM properties WHERE atomic_number=$ATOMIC_NUMBER;")"
+# Exit if the element was not found
+if [[ -z $ELEMENT_ID ]]; then
+    echo "I could not find that element in the database."
+    exit 1
+fi
 
-# RESPONSE="$($PSQL "SELECT * FROM elements FULL JOIN properties ON elements.atomic_number = properties.atomic_number FULL JOIN types ON properties.type_id = types.type_id WHERE elements.atomic_number=$ATOMIC_NUMBER;")"
-# echo "$RESPONSE" | IFS='|' read NUMBER ELEMENT_SYMBBOL ELEMENT_NAME NUMBER ATOMIC_MASS MELTING_POINT BOLING_POINT TYPE_ID TYPE_ID TYPE
+# Retrieve element details
+NAME=$($DB_CMD "SELECT name FROM elements WHERE atomic_number = $ELEMENT_ID;")
+SYMBOL=$($DB_CMD "SELECT symbol FROM elements WHERE atomic_number = $ELEMENT_ID;")
+TYPE_ID=$($DB_CMD "SELECT type_id FROM properties WHERE atomic_number = $ELEMENT_ID;")
+TYPE=$($DB_CMD "SELECT type FROM types WHERE type_id = $TYPE_ID;")
+MASS=$($DB_CMD "SELECT atomic_mass FROM properties WHERE atomic_number = $ELEMENT_ID;")
+MELTING_POINT=$($DB_CMD "SELECT melting_point_celsius FROM properties WHERE atomic_number = $ELEMENT_ID;")
+BOILING_POINT=$($DB_CMD "SELECT boiling_point_celsius FROM properties WHERE atomic_number = $ELEMENT_ID;")
 
-echo -e "The element with atomic number $ATOMIC_NUMBER is $ELEMENT_NAME ($ELEMENT_SYMBOL). It's a $ELEMENT_TYPE, with a mass of $ATOMIC_MASS amu. $ELEMENT_NAME has a melting point of $MELTING_POINT celsius and a boiling point of $BOILING_POINT celsius."
+# Output element details
+echo -e "The element with atomic number $ELEMENT_ID is $NAME ($SYMBOL). It's a $TYPE, with a mass of $MASS amu. $NAME has a melting point of $MELTING_POINT°C and a boiling point of $BOILING_POINT°C."
